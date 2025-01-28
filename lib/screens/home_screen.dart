@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../constants.dart';
 import 'results_screen.dart';
-import 'search_results_screen.dart';
+import '../services/product_service.dart';
+import '../constants.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +15,12 @@ class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 1; // Default to Home page (index 1)
   late MobileScannerController _scannerController;
 
+  // Search-related state
+  final TextEditingController _searchController = TextEditingController();
+  List<dynamic> _searchResults = [];
+  final List<String> _recentSearches = [];
+  bool _isSearching = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,6 +30,7 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _scannerController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -40,14 +47,40 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _performSearch(String query) async {
+    if (query.isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      final results = await ProductService().searchProducts(query);
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+
+      // Add to recent searches
+      if (!_recentSearches.contains(query)) {
+        setState(() {
+          _recentSearches.add(query);
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _currentIndex == 1
-          ? null
-          : AppBar(
-              title: Text(Constants.appName),
-            ),
+      appBar: _currentIndex == 1 ? null : AppBar(
+        title: Text(Constants.appName),
+      ),
       body: _buildCurrentPage(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -110,22 +143,66 @@ class HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: TextField(
+            controller: _searchController,
             decoration: InputDecoration(
               hintText: 'Search for items...',
               border: OutlineInputBorder(),
               suffixIcon: Icon(Icons.search),
             ),
-            onSubmitted: (query) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SearchResultsScreen(searchQuery: query),
-                ),
-              );
+            onChanged: (query) {
+              setState(() {
+                _searchResults = []; // Clear results while typing
+              });
             },
+            onSubmitted: _performSearch,
           ),
         ),
+        Expanded(
+          child: _searchController.text.isEmpty
+              ? _buildRecentSearches()
+              : _isSearching
+                  ? Center(child: CircularProgressIndicator())
+                  : _searchResults.isEmpty
+                      ? Center(child: Text('No results found.'))
+                      : _buildSearchResults(),
+        ),
       ],
+    );
+  }
+
+  Widget _buildRecentSearches() {
+    return ListView.builder(
+      itemCount: _recentSearches.length,
+      itemBuilder: (context, index) {
+        return ListTile(
+          title: Text(_recentSearches[index]),
+          onTap: () {
+            _searchController.text = _recentSearches[index];
+            _performSearch(_recentSearches[index]);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResults() {
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final product = _searchResults[index];
+        return ListTile(
+          title: Text(product['product_name'] ?? 'Unknown Product'),
+          subtitle: Text(product['brands'] ?? 'Unknown Brand'),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ResultsScreen(barcode: product['code']),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
