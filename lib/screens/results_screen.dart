@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/product_service.dart';
 // ignore: unused_import
 import '../constants.dart';
+import '../utils/favorite_manager.dart';
 
 class ResultsScreen extends StatefulWidget {
   final String barcode;
@@ -18,6 +19,7 @@ class ResultsScreenState extends State<ResultsScreen> {
   String _imageUrl = '';
   bool _isLoading = true;
   String _errorMessage = '';
+  bool _isFavorited = false;
 
   // Mock data for store prices
   final List<Map<String, dynamic>> _storePrices = [
@@ -32,6 +34,7 @@ class ResultsScreenState extends State<ResultsScreen> {
   void initState() {
     super.initState();
     _fetchProductDetails();
+    _checkIfFavorited();
   }
 
   Future<void> _fetchProductDetails() async {
@@ -59,11 +62,38 @@ class ResultsScreenState extends State<ResultsScreen> {
     }
   }
 
+  Future<void> _checkIfFavorited() async {
+    final isFavorited = await FavoriteManager.isFavorited(widget.barcode);
+    setState(() {
+      _isFavorited = isFavorited;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isFavorited) {
+      await FavoriteManager.removeFavorite(widget.barcode);
+    } else {
+      await FavoriteManager.addFavorite(widget.barcode, _productName, _brand, _imageUrl);
+    }
+    setState(() {
+      _isFavorited = !_isFavorited;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Product Details'),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorited ? Icons.favorite : Icons.favorite_border,
+              color: _isFavorited ? Colors.red : null,
+            ),
+            onPressed: _toggleFavorite,
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())

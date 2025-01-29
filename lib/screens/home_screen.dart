@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'results_screen.dart';
+import '../utils/favorite_manager.dart';
 import '../services/product_service.dart';
 import '../constants.dart';
 
@@ -14,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 1; // Default to Home page (index 1)
   late MobileScannerController _scannerController;
+  List<Map<String, String>> _favorites = [];
 
   // Search-related state
   final TextEditingController _searchController = TextEditingController();
@@ -25,6 +27,14 @@ class HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scannerController = MobileScannerController();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    final favorites = await FavoriteManager.getFavorites();
+    setState(() {
+      _favorites = favorites;
+    });
   }
 
   @override
@@ -78,9 +88,11 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _currentIndex == 1 ? null : AppBar(
-        title: Text(Constants.appName),
-      ),
+      appBar: _currentIndex == 1
+          ? null
+          : AppBar(
+              title: Text(Constants.appName),
+            ),
       body: _buildCurrentPage(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -132,8 +144,37 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeTab() {
+    _loadFavorites();
+    
     return Center(
-      child: Text('Home Page - Display deals and price changes here.'),
+      child: _favorites.isEmpty
+          ? Center(child: Text('No favorited products yet.'))
+          : ListView.builder(
+              itemCount: _favorites.length,
+              itemBuilder: (context, index) {
+                final product = _favorites[index];
+                return ListTile(
+                  leading: product['imageUrl']!.isNotEmpty
+                      ? Image.network(
+                          product['imageUrl']!,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                        )
+                      : Icon(Icons.image_not_supported),
+                  title: Text(product['productName']!),
+                  subtitle: Text(product['brand']!),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ResultsScreen(barcode: product['barcode']!),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
     );
   }
 
